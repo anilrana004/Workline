@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: workline-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PAYLOAD_CONFIG_PATH
+        value: src/payload.config.ts
+      # Add your other environment variables (MONGODB_URI, PAYLOAD_SECRET, etc.) in the Render dashboard or here 
