@@ -1,82 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useFormState, useField } from 'payload/components/forms';
+import { useForm, useField } from 'payload/components/forms';
 import { Banner, Button } from 'payload/components';
 import './WorkflowStatus.scss';
 
-// Basic types - consider moving to a central types file
-interface WorkflowLog {
-  id: string;
-  action: string;
-  user: { name: string };
-  comment?: string;
-  timestamp: string;
-  step: { name: string };
-}
-
-const WorkflowStatusPill = ({ status }: { status: string }) => {
-    // A simple component to render a status pill
-    return <span className={`status-pill status-${status}`}>{status}</span>;
-}
+interface Log { id: string; user: { name: string }; action: string; step: { name: string }; timestamp: string; comment?: string; }
+interface PaginatedDocs<T> { docs: T[]; }
+interface ApiResponse { success: boolean; message?: string; }
+interface AnyDoc { id: string; workflow?: string; collection?: string; [key: string]: any; }
 
 const baseClass = 'workflow-status';
 
 const WorkflowStatus: React.FC = () => {
   const { t } = useTranslation('workflow');
-  const { initialData } = useFormState();
+  const { getData } = useForm();
   const { value: workflowStatus } = useField<any>({ path: 'workflowStatus' });
-  
-  const [logs, setLogs] = useState<WorkflowLog[]>([]);
+
+  const [logs, setLogs] = useState<Log[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      if (!initialData?.id || !initialData?.workflow) return;
-      
-      setIsLoading(true);
-      try {
-        const response = await fetch(
-          `/api/workflow-logs?where[document.id][equals]=${initialData.id}&depth=1`
-        );
-        const data = await response.json();
-        if (data.docs) {
-          setLogs(data.docs);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch logs');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const doc = getData() as AnyDoc;
 
+  const fetchLogs = async () => {
+    if (!doc.id || !doc.workflow) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/workflow-logs?where[document.id][equals]=${doc.id}&depth=1`);
+      const data = await response.json() as PaginatedDocs<Log>;
+      if (data?.docs && Array.isArray(data.docs)) {
+        setLogs(data.docs);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch logs');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchLogs();
-  }, [initialData]);
+  }, [doc.id, doc.workflow]);
 
   const handleAction = async (action: string) => {
-    if (typeof window === 'undefined') return;
-    const comment = window.prompt(t('add_comment_prompt'));
-
     setIsLoading(true);
+    setError(null);
     try {
       const response = await fetch('/api/workflows/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentId: initialData.id,
-          collection: initialData.collection,
-          workflowId: initialData.workflow,
-          action,
-          comment,
+          documentId: doc.id,
+          collection: doc.collection,
+          workflowId: doc.workflow,
+          action: action,
         }),
       });
-      const data = await response.json();
-      if (data.success) {
-        alert(t('action_success'));
-        window.location.reload();
-      } else {
-        throw new Error(data.message || t('action_failed'));
+      const data = await response.json() as ApiResponse;
+      if (!data.success) {
+        throw new Error(data.message || 'Action failed');
       }
+      await fetchLogs();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -84,20 +68,16 @@ const WorkflowStatus: React.FC = () => {
     }
   };
 
-  if (!initialData?.workflow) {
-    return <Banner>{t('no_workflow_assigned')}</Banner>;
-  }
-
-  if (isLoading) return <div>{t('loading')}</div>;
-  if (error) return <Banner type="error">{error}</Banner>;
+  if (!doc.workflow) return <Banner>{t('no_workflow_assigned')}</Banner>;
 
   return (
     <div className={baseClass}>
       <h4>{t('workflow_status')}</h4>
+      {error && <Banner type="error">{error}</Banner>}
+      {isLoading && <div>{t('loading')}</div>}
+      
       <div className={`${baseClass}__summary`}>
-        <p><strong>{t('current_status')}:</strong> <WorkflowStatusPill status={(workflowStatus as any)?.status || 'unknown'} /></p>
-        <p><strong>{t('current_step')}:</strong> {(workflowStatus as any)?.currentStep?.name || t('not_started')}</p>
-        <p><strong>{t('last_updated')}:</strong> {new Date((workflowStatus as any)?.lastUpdated).toLocaleString()}</p>
+        <p><strong>{t('current_step')}:</strong> {workflowStatus?.currentStep?.name || t('not_started')}</p>
       </div>
 
       <div className={`${baseClass}__actions`}>
@@ -108,19 +88,14 @@ const WorkflowStatus: React.FC = () => {
 
       <div className={`${baseClass}__logs`}>
         <h5>{t('history')}</h5>
-        {logs.length > 0 ? (
-          <ul>
-            {logs.map((log) => (
-              <li key={log.id}>
-                <strong>{new Date(log.timestamp).toLocaleString()}:</strong> {log.user.name}{' '}
-                <em>{log.action}</em> on step "{log.step.name}"
-                {log.comment && <p><strong>{t('comment')}:</strong> {log.comment}</p>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>{t('no_history_available')}</p>
-        )}
+        <ul>
+          {logs.map((log) => (
+            <li key={log.id}>
+              {new Date(log.timestamp).toLocaleString()}: {log.user.name} {log.action} step "{log.step.name}"
+              {log.comment && <span> - "{log.comment}"</span>}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

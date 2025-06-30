@@ -8,6 +8,7 @@ import { Blogs } from './collections/Blogs';
 import { Contracts } from './collections/Contracts';
 import { Workflows } from './collections/Workflows';
 import { WorkflowLogs } from './collections/WorkflowLogs';
+import { Media } from './collections/Media';
 
 export default buildConfig({
   serverURL: process.env.PAYLOAD_PUBLIC_SERVER_URL || 'http://localhost:3000',
@@ -19,7 +20,7 @@ export default buildConfig({
     },
   },
   editor: slateEditor({}),
-  collections: [Users, Blogs, Contracts, Workflows, WorkflowLogs],
+  collections: [Users, Blogs, Contracts, Workflows, WorkflowLogs, Media],
   typescript: {
     outputFile: path.resolve(__dirname, 'payload-types.ts'),
   },
