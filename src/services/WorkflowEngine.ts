@@ -12,6 +12,16 @@ export class WorkflowEngine {
     this.notificationService = new WorkflowNotificationService();
   }
 
+  async validateActionPermissions(userId: string, step: any, doc: any, action: string): Promise<boolean> {
+    // This is a basic implementation. You might want to expand this logic.
+    if (!step || !step.assignees) {
+      return false;
+    }
+    // TODO: Check user roles against step.assignees.roles
+    console.log(`Validating action '${action}' for user ${userId} on step ${step.name}`);
+    return true; // Placeholder
+  }
+
   async startWorkflow(doc: any, workflow: DatabaseWorkflow, req: PayloadRequest): Promise<void> {
     console.log(`Starting workflow: ${workflow.name} for document: ${doc.id}`);
 
@@ -108,25 +118,13 @@ export class WorkflowEngine {
     doc: any,
     workflow: DatabaseWorkflow,
     currentStep: any,
+    action: string,
     req: PayloadRequest
   ): Promise<any | null> {
-    // Get the latest action for current step
-    const stepLogs = await this.logsService.getStepLogs(
-      workflow.id,
-      doc.id,
-      currentStep.stepNumber,
-      req
-    );
-
-    const latestAction = stepLogs[stepLogs.length - 1];
-    if (!latestAction) {
-      return null;
-    }
-
-    // Check next steps based on action
+    // Logic to determine next step based on action
     if (currentStep.nextSteps) {
       for (const nextStepConfig of currentStep.nextSteps) {
-        if (nextStepConfig.condition === latestAction.action || nextStepConfig.condition === 'always') {
+        if (nextStepConfig.condition === action || nextStepConfig.condition === 'always') {
           const nextStep = workflow.steps?.find((step: any) => step.stepNumber === nextStepConfig.nextStepNumber);
           if (nextStep) {
             return nextStep;
@@ -135,11 +133,14 @@ export class WorkflowEngine {
       }
     }
 
-    // Default: go to next sequential step
-    const nextStepNumber = currentStep.stepNumber + 1;
-    const nextStep = workflow.steps?.find((step: any) => step.stepNumber === nextStepNumber);
+    // Default: go to next sequential step if action is 'approved'
+    if (action === 'approved') {
+      const nextStepNumber = currentStep.stepNumber + 1;
+      const nextStep = workflow.steps?.find((step: any) => step.stepNumber === nextStepNumber);
+      return nextStep || null;
+    }
     
-    return nextStep || null;
+    return null;
   }
 
   async moveToNextStep(
@@ -147,7 +148,7 @@ export class WorkflowEngine {
     workflow: DatabaseWorkflow,
     nextStep: any,
     req: PayloadRequest
-  ): Promise<void> {
+  ): Promise<{ nextStep: any, isCompleted: boolean }> {
     console.log(`Moving to next step: ${nextStep.name}`);
 
     // Update document workflow status
@@ -188,10 +189,12 @@ export class WorkflowEngine {
       nextStep,
       req
     );
+    
+    return { nextStep, isCompleted: false };
   }
 
-  async completeWorkflow(doc: any, workflow: DatabaseWorkflow, req: PayloadRequest): Promise<void> {
-    console.log(`Completing workflow: ${workflow.name} for document: ${doc.id}`);
+  async completeWorkflow(doc: any, workflow: DatabaseWorkflow, action: string, req: PayloadRequest): Promise<{ nextStep: null, isCompleted: boolean }> {
+    console.log(`Completing workflow: ${workflow.name} for document: ${doc.id} with action: ${action}`);
 
     // Update document workflow status
     await req.payload.update({
@@ -226,5 +229,7 @@ export class WorkflowEngine {
 
     // Send completion notification
     await this.notificationService.notifyWorkflowCompletion(doc, workflow, req);
+
+    return { nextStep: null, isCompleted: true };
   }
 } 

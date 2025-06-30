@@ -218,4 +218,21 @@ export class WorkflowNotificationService {
     console.log(`Message: ${message}`);
     console.log('---');
   }
+
+  public async sendStepNotifications(doc: any, workflow: any, step: WorkflowStep, action: string, req: PayloadRequest): Promise<void> {
+    console.log(`sendStepNotifications called for action: ${action}`);
+    // This is a placeholder. In a real implementation, you would have logic
+    // to send different notifications based on the action (e.g., approved, rejected).
+    await this.notifyStepAssignees(doc, workflow, step, req);
+  }
+
+  public async sendEscalationNotification(item: any, req: PayloadRequest): Promise<void> {
+    console.log('sendEscalationNotification called for item:', item);
+    // Placeholder for sending a single escalation notice
+  }
+
+  public async testNotification(user: any, req: PayloadRequest): Promise<void> {
+    console.log('testNotification called for user:', user);
+    await this.sendEmail(user.email, 'Test Notification', 'This is a test notification from the Workflow System.');
+  }
 } 

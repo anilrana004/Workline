@@ -16,6 +16,7 @@ export interface WorkflowLog {
   user: string;
   timestamp?: Date;
   comment?: string;
+  attachments?: string[];
   metadata?: any;
   slaStatus?: {
     isOverdue: boolean;
@@ -225,5 +226,34 @@ export class WorkflowLogsService {
       console.error('Error checking SLA status:', error);
       return { isOverdue: false, overdueHours: 0 };
     }
+  }
+
+  async getActiveWorkflowInstances(req: PayloadRequest): Promise<any[]> {
+    console.log('getActiveWorkflowInstances called');
+    return [];
+  }
+
+  async getOverdueSLAItems(req: PayloadRequest): Promise<any[]> {
+    console.log('getOverdueSLAItems called');
+    return [];
+  }
+
+  async escalateOverdueItems(items: any[], req: PayloadRequest): Promise<void> {
+    console.log('escalateOverdueItems called with items:', items);
+  }
+
+  async getWorkflowAnalytics(req: PayloadRequest): Promise<any> {
+    console.log('getWorkflowAnalytics called');
+    return {};
+  }
+
+  async getPerformanceMetrics(req: PayloadRequest): Promise<any> {
+    console.log('getPerformanceMetrics called');
+    return {};
+  }
+
+  async exportWorkflowData(format: 'csv' | 'json', req: PayloadRequest): Promise<string> {
+    console.log(`exportWorkflowData called with format: ${format}`);
+    return `Data export for ${format}`;
   }
 } 

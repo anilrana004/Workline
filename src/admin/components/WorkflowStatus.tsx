@@ -1,202 +1,126 @@
 import React, { useState, useEffect } from 'react';
-import { useField } from 'payload/components/forms';
+import { useTranslation } from 'react-i18next';
+import { useFormState, useField } from 'payload/components/forms';
+import { Banner, Button } from 'payload/components';
 import './WorkflowStatus.scss';
 
-declare global {
-  interface Window {
-    location: {
-      pathname: string;
-      reload(): void;
-    };
-  }
-}
-
-interface WorkflowStep {
-  stepNumber: number;
-  name: string;
-  stepType: string;
-  assignees: {
-    type: 'role' | 'user';
-    roles?: string[];
-    users?: string[];
-  };
-}
-
-interface Workflow {
-  id: string;
-  name: string;
-  steps: WorkflowStep[];
-  isActive: boolean;
-}
-
+// Basic types - consider moving to a central types file
 interface WorkflowLog {
   id: string;
-  step: {
-    stepNumber: number;
-    stepName: string;
-    stepType: string;
-  };
   action: string;
-  user: {
-    name: string;
-  };
+  user: { name: string };
   comment?: string;
   timestamp: string;
+  step: { name: string };
 }
 
+const WorkflowStatusPill = ({ status }: { status: string }) => {
+    // A simple component to render a status pill
+    return <span className={`status-pill status-${status}`}>{status}</span>;
+}
+
+const baseClass = 'workflow-status';
+
 const WorkflowStatus: React.FC = () => {
-  const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const { t } = useTranslation('workflow');
+  const { initialData } = useFormState();
+  const { value: workflowStatus } = useField<any>({ path: 'workflowStatus' });
+  
   const [logs, setLogs] = useState<WorkflowLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { value: workflowId } = useField<string>({ path: 'workflow' });
-  const { value: workflowStatus } = useField<any>({ path: 'workflowStatus' });
-
   useEffect(() => {
-    const fetchWorkflowData = async () => {
-      if (!workflowId) {
-        setLoading(false);
-        return;
-      }
-
+    const fetchLogs = async () => {
+      if (!initialData?.id || !initialData?.workflow) return;
+      
+      setIsLoading(true);
       try {
-        // Fetch workflow details
-        const workflowResponse = await fetch(`/api/workflows/${workflowId}`);
-        if (workflowResponse.ok) {
-          const data = await workflowResponse.json();
-          setWorkflow(data as Workflow);
-        }
-
-        // Fetch workflow logs
-        const logsResponse = await fetch(`/api/workflow-logs?workflow=${workflowId}`);
-        if (logsResponse.ok) {
-          const logsData = await logsResponse.json();
-          setLogs(logsData.docs || []);
+        const response = await fetch(
+          `/api/workflow-logs?where[document.id][equals]=${initialData.id}&depth=1`
+        );
+        const data = await response.json();
+        if (data.docs) {
+          setLogs(data.docs);
         }
       } catch (err) {
-        setError('Failed to fetch workflow data');
-        console.error('Error fetching workflow data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch logs');
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
-    fetchWorkflowData();
-  }, [workflowId]);
+    fetchLogs();
+  }, [initialData]);
 
-  const handleStepAction = async (action: string, stepNumber: number) => {
+  const handleAction = async (action: string) => {
+    if (typeof window === 'undefined') return;
+    const comment = window.prompt(t('add_comment_prompt'));
+
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/workflow-actions', {
+      const response = await fetch('/api/workflows/trigger', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          documentId: initialData.id,
+          collection: initialData.collection,
+          workflowId: initialData.workflow,
           action,
-          stepNumber,
-          documentId: window.location.pathname.split('/').pop(),
-          collection: window.location.pathname.split('/')[2],
-          workflowId: workflow?.id,
+          comment,
         }),
       });
-
-      if (response.ok) {
-        // Reload the page to show updated status
+      const data = await response.json();
+      if (data.success) {
+        alert(t('action_success'));
         window.location.reload();
       } else {
-        setError('Failed to perform action');
+        throw new Error(data.message || t('action_failed'));
       }
     } catch (err) {
-      setError('Failed to perform action');
-      console.error('Error performing action:', err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (loading) {
-    return <div className="workflow-status-loading">Loading workflow status...</div>;
+  if (!initialData?.workflow) {
+    return <Banner>{t('no_workflow_assigned')}</Banner>;
   }
 
-  if (error) {
-    return <div className="workflow-status-error">Error: {error}</div>;
-  }
-
-  if (!workflow || !workflowStatus) {
-    return <div className="workflow-status-none">No workflow assigned</div>;
-  }
-
-  const currentStep = workflow.steps.find(step => step.stepNumber === workflowStatus.currentStep);
-  const isCompleted = workflowStatus.isCompleted;
+  if (isLoading) return <div>{t('loading')}</div>;
+  if (error) return <Banner type="error">{error}</Banner>;
 
   return (
-    <div className="workflow-status">
-      <div className="workflow-header">
-        <h3>Workflow: {workflow.name}</h3>
-        <div className={`workflow-status-badge ${isCompleted ? 'completed' : 'active'}`}>
-          {isCompleted ? 'Completed' : 'Active'}
-        </div>
+    <div className={baseClass}>
+      <h4>{t('workflow_status')}</h4>
+      <div className={`${baseClass}__summary`}>
+        <p><strong>{t('current_status')}:</strong> <WorkflowStatusPill status={(workflowStatus as any)?.status || 'unknown'} /></p>
+        <p><strong>{t('current_step')}:</strong> {(workflowStatus as any)?.currentStep?.name || t('not_started')}</p>
+        <p><strong>{t('last_updated')}:</strong> {new Date((workflowStatus as any)?.lastUpdated).toLocaleString()}</p>
       </div>
 
-      <div className="workflow-progress">
-        <div className="progress-bar">
-          <div 
-            className="progress-fill"
-            style={{ width: `${(workflowStatus.currentStep / workflow.steps.length) * 100}%` }}
-          />
-        </div>
-        <div className="progress-text">
-          Step {workflowStatus.currentStep} of {workflow.steps.length}
-        </div>
+      <div className={`${baseClass}__actions`}>
+        <h5>{t('available_actions')}</h5>
+        <Button onClick={() => handleAction('approved')}>{t('approve')}</Button>
+        <Button buttonStyle="secondary" onClick={() => handleAction('rejected')}>{t('reject')}</Button>
       </div>
 
-      {currentStep && !isCompleted && (
-        <div className="current-step">
-          <h4>Current Step: {currentStep.name}</h4>
-          <p>Type: {currentStep.stepType}</p>
-          <p>Assignees: {currentStep.assignees.type === 'role' ? 'Roles' : 'Users'}</p>
-          
-          <div className="step-actions">
-            <button
-              className="action-button approve"
-              onClick={() => handleStepAction('approve', currentStep.stepNumber)}
-            >
-              Approve
-            </button>
-            <button
-              className="action-button reject"
-              onClick={() => handleStepAction('reject', currentStep.stepNumber)}
-            >
-              Reject
-            </button>
-            <button
-              className="action-button comment"
-              onClick={() => handleStepAction('comment', currentStep.stepNumber)}
-            >
-              Add Comment
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="workflow-logs">
-        <h4>Activity Log</h4>
-        <div className="logs-list">
-          {logs.map((log) => (
-            <div key={log.id} className="log-item">
-              <div className="log-header">
-                <span className="log-action">{log.action}</span>
-                <span className="log-step">{log.step.stepName}</span>
-                <span className="log-user">{log.user.name}</span>
-                <span className="log-time">
-                  {new Date(log.timestamp).toLocaleString()}
-                </span>
-              </div>
-              {log.comment && (
-                <div className="log-comment">{log.comment}</div>
-              )}
-            </div>
-          ))}
-        </div>
+      <div className={`${baseClass}__logs`}>
+        <h5>{t('history')}</h5>
+        {logs.length > 0 ? (
+          <ul>
+            {logs.map((log) => (
+              <li key={log.id}>
+                <strong>{new Date(log.timestamp).toLocaleString()}:</strong> {log.user.name}{' '}
+                <em>{log.action}</em> on step "{log.step.name}"
+                {log.comment && <p><strong>{t('comment')}:</strong> {log.comment}</p>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>{t('no_history_available')}</p>
+        )}
       </div>
     </div>
   );

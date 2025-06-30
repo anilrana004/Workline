@@ -136,6 +136,13 @@ export const WorkflowLogs: CollectionConfig = {
       required: false,
     },
     {
+      name: 'attachments',
+      type: 'relationship',
+      relationTo: 'media',
+      hasMany: true,
+      required: false,
+    },
+    {
       name: 'metadata',
       type: 'json',
       required: false,
