@@ -177,6 +177,7 @@ Render is the recommended platform for hosting this Payload CMS project.
 ### 5. Access your app
 - Admin UI: `https://your-app-name.onrender.com/admin`
 - API: `https://your-app-name.onrender.com/api`
+- Payload Admin URL: https://workline-xrj0.onrender.com/admin
 
 ---
 
