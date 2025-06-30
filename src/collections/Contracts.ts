@@ -187,6 +187,7 @@ export const Contracts: CollectionConfig = {
               doc,
               workflow,
               currentStep,
+              'approved',
               req
             );
 
@@ -194,7 +195,7 @@ export const Contracts: CollectionConfig = {
               await workflowEngine.moveToNextStep(doc, workflow, nextStep, req);
             } else {
               // Workflow completed
-              await workflowEngine.completeWorkflow(doc, workflow, req);
+              await workflowEngine.completeWorkflow(doc, workflow, 'approved', req);
             }
 
           } else if (operation === 'create') {
